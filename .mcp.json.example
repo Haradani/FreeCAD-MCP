@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "freecad": {
+      "command": "python",
+      "args": ["-m", "src.mcp_server"],
+      "cwd": "/path/to/freecad_mcp",
+      "env": {
+        "FREECAD_HOST": "localhost",
+        "FREECAD_PORT": "9875",
+        "TRELLIS_HOST": "localhost",
+        "TRELLIS_PORT": "8000",
+        "DIFFUSION_HOST": "localhost",
+        "DIFFUSION_PORT": "8188"
+      }
+    }
+  }
+}

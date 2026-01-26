@@ -1,0 +1,68 @@
+# Lightweight headless FreeCAD image for API-only access
+#
+# This is a minimal image without VNC/GUI support
+# Use this for pure MCP/API workloads
+
+FROM ubuntu:22.04
+
+LABEL maintainer="FreeCAD MCP"
+LABEL description="Headless FreeCAD with XML-RPC server"
+
+# Prevent interactive prompts
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install FreeCAD and dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    freecad \
+    freecad-python3 \
+    python3 \
+    python3-pip \
+    python3-pil \
+    python3-numpy \
+    xvfb \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+RUN pip3 install --no-cache-dir Pillow
+
+# Create app directory
+RUN mkdir -p /app /config /data
+
+# Copy the RPC server script
+COPY rpc_server.py /app/rpc_server.py
+RUN chmod +x /app/rpc_server.py
+
+# Create entrypoint that starts Xvfb for offscreen rendering
+COPY <<'EOF' /app/start.sh
+#!/bin/bash
+set -e
+
+echo "Starting headless FreeCAD..."
+
+# Start virtual framebuffer for offscreen rendering
+Xvfb :99 -screen 0 1920x1080x24 &
+export DISPLAY=:99
+
+# Wait for Xvfb to start
+sleep 2
+
+# Start the RPC server
+exec python3 /app/rpc_server.py
+EOF
+RUN chmod +x /app/start.sh
+
+# Environment variables
+ENV RPC_PORT=9875
+ENV RPC_HOST=0.0.0.0
+ENV DISPLAY=:99
+
+# Expose RPC port
+EXPOSE 9875
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD python3 -c "import xmlrpc.client; c=xmlrpc.client.ServerProxy('http://localhost:9875'); print(c.ping())" || exit 1
+
+WORKDIR /config
+
+ENTRYPOINT ["/app/start.sh"]

@@ -1,0 +1,201 @@
+version: "3.8"
+
+services:
+  # FreeCAD container with XML-RPC server
+  freecad:
+    build:
+      context: ./docker/freecad
+      dockerfile: Dockerfile
+    container_name: freecad-mcp
+    restart: unless-stopped
+    ports:
+      - "9875:9875"   # XML-RPC
+      - "3000:3000"   # VNC web client (if GUI enabled)
+      - "5900:5900"   # VNC server (if GUI enabled)
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - RPC_PORT=9875
+      - RPC_HOST=0.0.0.0
+      - ENABLE_GUI=${ENABLE_GUI:-false}
+    volumes:
+      - ./data/freecad:/config
+      - ./data/models:/data/models
+      - ./data/exports:/data/exports
+      - ./data/trellis/outputs:/data/trellis/outputs:ro
+      - ./cache:/data/cache:rw
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import xmlrpc.client; c=xmlrpc.client.ServerProxy('http://localhost:9875'); print(c.ping())"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Headless FreeCAD (alternative lighter container)
+  freecad-headless:
+    build:
+      context: ./docker/freecad
+      dockerfile: Dockerfile.headless
+    container_name: freecad-headless
+    restart: unless-stopped
+    profiles:
+      - headless
+    ports:
+      - "9875:9875"
+    environment:
+      - RPC_PORT=9875
+      - RPC_HOST=0.0.0.0
+    volumes:
+      - ./data/freecad:/config
+      - ./data/models:/data/models
+      - ./data/exports:/data/exports
+      - ./data/trellis/outputs:/data/trellis/outputs:ro
+      - ./cache:/data/cache:rw
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import xmlrpc.client; c=xmlrpc.client.ServerProxy('http://localhost:9875'); print(c.ping())"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Vision AI inference container
+  inference:
+    build:
+      context: ./docker/inference
+      dockerfile: Dockerfile
+    container_name: freecad-inference
+    restart: unless-stopped
+    profiles:
+      - vision
+    ports:
+      - "5555:5555"   # ZMQ
+    environment:
+      - ZMQ_PORT=5555
+      - ZMQ_HOST=0.0.0.0
+      - VLM_DEVICE=cuda:0
+      - SAM_DEVICE=cuda:1
+      - VLM_QUANTIZATION=${VLM_QUANTIZATION:-4bit}
+      - TRANSFORMERS_CACHE=/models/transformers
+      - HF_HOME=/models/huggingface
+    volumes:
+      - ./data/models:/models
+      - ./data/inference:/data
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import zmq; c=zmq.Context(); s=c.socket(zmq.REQ); s.connect('tcp://localhost:5555'); s.send_json({'action':'ping'}); print(s.recv_json())"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 120s
+
+  # TRELLIS.2 Image-to-3D generation service
+  trellis:
+    build:
+      context: ./docker/trellis
+      dockerfile: Dockerfile
+    container_name: freecad-trellis
+    restart: unless-stopped
+    profiles:
+      - trellis
+      - full
+    ports:
+      - "8000:8000"
+    environment:
+      - TRELLIS_DEVICE=cuda:0
+      - CUDA_VISIBLE_DEVICES=1
+      - HF_HOME=/storage/models/huggingface
+      - TRANSFORMERS_CACHE=/storage/models/huggingface
+    volumes:
+      - ${HOME}/.cache/huggingface:/storage/models/huggingface:rw
+      - ./data/trellis/inputs:/storage/inputs:rw
+      - ./data/trellis/outputs:/storage/outputs:rw
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+  # ComfyUI diffusion-based image generation
+  diffusion-gen:
+    build:
+      context: ./docker/diffusion
+      dockerfile: Dockerfile
+    container_name: freecad-diffusion
+    restart: unless-stopped
+    profiles:
+      - diffusion
+      - full
+    ports:
+      - "8188:8188"
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    volumes:
+      - ./data/diffusion/models/checkpoints:/storage/models/checkpoints:rw
+      - ./data/diffusion/models/unet:/storage/models/unet:rw
+      - ./data/diffusion/models/loras:/storage/models/loras:rw
+      - ./data/diffusion/models/vae:/storage/models/vae:rw
+      - ./data/diffusion/models/clip:/storage/models/clip:rw
+      - ./data/diffusion/inputs:/storage/inputs:rw
+      - ./data/diffusion/outputs:/storage/outputs:rw
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8188/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # MCP Server + Gradio debug interface
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+    container_name: freecad-mcp-server
+    restart: unless-stopped
+    profiles:
+      - server
+    ports:
+      - "7860:7860"   # Gradio
+    environment:
+      - FREECAD_HOST=freecad
+      - FREECAD_PORT=9875
+      - INFERENCE_HOST=inference
+      - INFERENCE_PORT=5555
+      - GRADIO_PORT=7860
+      - ENABLE_TUNNEL=${ENABLE_TUNNEL:-true}
+    volumes:
+      - ./data/gradio:/app/data
+    depends_on:
+      freecad:
+        condition: service_healthy
+
+volumes:
+  freecad-config:
+  models:
+  inference-data:
+
+networks:
+  default:
+    name: freecad-mcp-network

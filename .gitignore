@@ -1,0 +1,114 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# Testing
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Docker
+docker/freecad/data/
+docker/inference/models/
+
+# External repositories (cloned for reference)
+external/*
+!external/.gitkeep
+!external/README.md
+
+# Model weights and large files
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.onnx
+*.gguf
+models/
+
+# FreeCAD files (keep examples)
+*.FCStd.lock
+*.FCStd1
+*.FCBak
+
+# Logs and temp files
+*.log
+logs/
+tmp/
+temp/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+secrets/
+
+# Gradio
+flagged/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Output files
+output/
+renders/
+exports/
+
+# Cache (session-based output storage)
+cache/
+
+# Data directory (model weights, container state, FreeCAD configs)
+data/
+
+# Gradio certificates
+.gradio/
+
+# Local MCP configuration (contains user-specific paths)
+.mcp.json
+
+# Claude Code local settings
+.claude/
