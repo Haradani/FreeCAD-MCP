@@ -10,7 +10,7 @@ services:
     restart: unless-stopped
     ports:
       - "9875:9875"   # XML-RPC
-      - "3000:3000"   # VNC web client (if GUI enabled)
+      - "3001:3000"   # VNC web client (if GUI enabled)
       - "5900:5900"   # VNC server (if GUI enabled)
     environment:
       - PUID=1000
